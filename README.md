@@ -1,2 +1,0 @@
-# charge_reduction_overlap_calculator
-Charge reduction overlap calculator
