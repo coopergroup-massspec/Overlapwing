@@ -125,6 +125,19 @@
       text-align: left;
       vertical-align: top;
     }
+
+    /* Ensure cards take up the full available width on narrow screens and avoid
+       inconsistent widths between different panes. */
+    .card {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    /* Allow horizontal scrolling for wide tables on small devices to prevent
+       overflow and maintain consistent card widths. */
+    #tableWrap {
+      overflow-x: auto;
+    }
     th { color: var(--accent); font-weight: 700; }
     .mono { font-family: Consolas, Menlo, Monaco, monospace; }
     .small { font-size: 0.9rem; color: var(--muted); }
@@ -147,46 +160,6 @@
     @media (max-width: 900px) {
       .grid { grid-template-columns: 1fr; }
       .row { grid-template-columns: 1fr; }
-    }
-    
-    /*
-      Additional responsive rules for narrow screens.  On very small devices
-      (roughly smartphones in portrait orientation) we collapse complex
-      layouts into single‑column stacks and remove fixed widths so that the
-      form controls wrap naturally.  Without these overrides the MS²/MS³
-      isolation width inputs can spill off the screen on iOS Safari/Chrome.
-    */
-    @media (max-width: 600px) {
-      /* Reduce padding on the wrapper and cards to maximise available space */
-      .wrap {
-        padding: 16px;
-      }
-      .card {
-        padding: 16px;
-      }
-      /* Stack buttons and reduce gaps */
-      .btns {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 8px;
-      }
-      /* In the isolation width inputs, stack label and input vertically */
-      #isoInputs div {
-        flex-direction: column;
-        align-items: stretch;
-      }
-      #isoInputs label {
-        min-width: 0;
-        margin-bottom: 4px;
-      }
-      #isoInputs input {
-        width: 100%;
-      }
-      /* Ensure any inline widths on labels inside isoModeRow do not force extra width */
-      #isoModeRow label[for="ms2Width"],
-      #isoModeRow label[for="ms3Width"] {
-        min-width: 0 !important;
-      }
     }
   </style>
   <!-- Load Plotly for interactive spectrum rendering -->
@@ -865,7 +838,15 @@
           textfont: { color: textColour, size: 10 }
         }
       ];
-      Plotly.newPlot('spectrumChart', traces, layout, { responsive: true });
+      // Use a custom config to prevent the mode bar from overlaying data on small screens.
+      // Hiding the mode bar avoids Plotly's toolbar covering markers in mobile view.  Users
+      // can still interact with the chart via pinch/zoom gestures.
+      const config = {
+        responsive: true,
+        displayModeBar: false,
+        displaylogo: false
+      };
+      Plotly.newPlot('spectrumChart', traces, layout, config);
     }
 
     function renderTable(rows, maxReductions) {
