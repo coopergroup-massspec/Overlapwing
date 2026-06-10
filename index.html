@@ -916,12 +916,19 @@
       let filenameSuffix = '';
       // Determine if isolation mode is active for filtering overlaps
       const isoOn = document.getElementById('isoMode') && document.getElementById('isoMode').checked;
-      // Build a set of m/z values (rounded to 6 dp) that have MS3 overlap when isolation mode is enabled
+      // Build sets of m/z values to exclude
       const ms3Set = new Set();
-      if (isoOn && currentSpectrumData && currentSpectrumData.groups) {
+      const overlapSet = new Set();
+      if (currentSpectrumData && currentSpectrumData.groups) {
         currentSpectrumData.groups.forEach(g => {
-          if (g.ms3) {
-            ms3Set.add(g.mz.toFixed(6));
+          const key = g.mz.toFixed(6);
+          // Collect MS3 overlaps only when isolation mode is enabled
+          if (isoOn && g.ms3) {
+            ms3Set.add(key);
+          }
+          // Collect any exact overlaps regardless of isolation mode
+          if (!g.isPrecursor && g.overlap) {
+            overlapSet.add(key);
           }
         });
       }
@@ -938,8 +945,9 @@
             const q = z - r;
             if (q < 1) break;
             const mz = (M_z + q * H) / q;
-            // Skip products flagged as MS3 overlap when isolation mode is active
-            if (isoOn && ms3Set.has(mz.toFixed(6))) continue;
+            // Skip products flagged as exact overlaps or MS3 overlap when isolation mode is active
+            const mzKey = mz.toFixed(6);
+            if (overlapSet.has(mzKey) || (isoOn && ms3Set.has(mzKey))) continue;
             lines.push(`${label},${mz.toFixed(4)}`);
           }
         });
@@ -960,8 +968,9 @@
           const q = z - r;
           if (q < 1) break;
           const mz = (M_z + q * H) / q;
-          // Skip products flagged as MS3 overlap when isolation mode is active
-          if (isoOn && ms3Set.has(mz.toFixed(6))) continue;
+          // Skip products flagged as exact overlaps or MS3 overlap when isolation mode is active
+          const mzKey = mz.toFixed(6);
+          if (overlapSet.has(mzKey) || (isoOn && ms3Set.has(mzKey))) continue;
           lines.push(`${label},${mz.toFixed(4)}`);
         }
         filenameSuffix = mwText.replace(/\./g, 'p') + 'kDa';
@@ -1031,13 +1040,20 @@
       }
       // Determine the maximum number of reductions for this charge (safe limit from exact overlaps)
       const safe = chargeSafeLimits[z] !== undefined ? chargeSafeLimits[z] : 0;
-      // Determine if isolation mode is active and build a set of m/z values that have MS³ overlap
+      // Determine if isolation mode is active and build sets of m/z values to exclude
       const isoOn = document.getElementById('isoMode') && document.getElementById('isoMode').checked;
       const ms3Set = new Set();
-      if (isoOn && currentSpectrumData && currentSpectrumData.groups) {
+      const overlapSet = new Set();
+      if (currentSpectrumData && currentSpectrumData.groups) {
         currentSpectrumData.groups.forEach(g => {
-          if (g.ms3) {
-            ms3Set.add(g.mz.toFixed(6));
+          const key = g.mz.toFixed(6);
+          // Collect MS3 overlaps only when isolation mode is enabled
+          if (isoOn && g.ms3) {
+            ms3Set.add(key);
+          }
+          // Collect any exact or MS2 overlaps (exclude precursor) for all modes
+          if (!g.isPrecursor && g.overlap) {
+            overlapSet.add(key);
           }
         });
       }
@@ -1054,8 +1070,8 @@
         const mzStr4 = mz.toFixed(4);
         // Format mapping
         const mapping = `${z}+→${q}+`;
-        if (isoOn && ms3Set.has(mzStr6)) {
-          // Will be excluded due to MS³ overlap
+        // Exclude if this m/z is flagged as an overlap by any charge or if it's within MS3 overlap
+        if (overlapSet.has(mzStr6) || (isoOn && ms3Set.has(mzStr6))) {
           listHtml += `<li><span class="bad">${mzStr4} (${mapping})</span></li>`;
         } else {
           listHtml += `<li>${mzStr4} (${mapping})</li>`;
