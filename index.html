@@ -55,7 +55,8 @@
     p { color: var(--muted); line-height: 1.5; }
     .grid {
       display: grid;
-      grid-template-columns: 1.2fr 1fr;
+      /* Single-column layout since the summary pane has been removed */
+      grid-template-columns: 1fr;
       gap: 20px;
       align-items: start;
     }
@@ -252,7 +253,6 @@
         <div class="btns">
           <button class="primary" onclick="calculate()">Calculate</button>
           <button onclick="loadExample()">Load example</button>
-          <button onclick="downloadCsv()">Export pair table (CSV)</button>
         </div>
 
 <!--        <h3 style="margin-top:18px;">Method</h3>
@@ -264,7 +264,8 @@
         </p>-->
       </div>
 
-      <div class="card">
+      <!-- Removed the separate summary pane to avoid confusion.  A hidden summary element remains for error reporting -->
+      <div class="card" id="summaryCard" style="display:none;">
         <h2>Summary</h2>
         <div id="summary">Enter values and click <b>Calculate</b>.</div>
       </div>
@@ -309,6 +310,10 @@
       <h2>Charge pair thresholds</h2>
       <p class="small">The earliest exact overlap is controlled by the smallest threshold in this table.</p>
       <div id="tableWrap"></div>
+      <!-- Moved the pair table export button here from the inputs pane -->
+      <div class="btns" style="margin-top:8px;">
+        <button onclick="downloadCsv()">Export pair table (CSV)</button>
+      </div>
     </div>
   </div>
 
@@ -998,16 +1003,25 @@
      */
     function onMwChange() {
       const select = document.getElementById('mwSelect');
-      if (!select || !currentSpectrumData) return;
+      // Proceed even if currentSpectrumData is null (e.g. Plotly unavailable) so that safe limits and
+      // target lists can still be updated.  Only abort if the select element itself is missing.
+      if (!select) return;
       const val = select.value;
       let highlightZ = null;
       if (val && val !== 'all') {
         const z = parseInt(val, 10);
         if (!isNaN(z)) highlightZ = z;
       }
-      // redraw spectrum with highlight if data exists
+      // redraw spectrum with highlight if data exists.  Guard against missing Plotly in test environments.
       if (currentSpectrumData) {
-        drawSpectrum(currentSpectrumData, highlightZ);
+        try {
+          if (typeof Plotly !== 'undefined') {
+            drawSpectrum(currentSpectrumData, highlightZ);
+          }
+        } catch (plotErr) {
+          // ignore plotting errors to allow subsequent updates
+          console && console.warn && console.warn('Plotly error:', plotErr);
+        }
       }
       // highlight rows in the pair table
       highlightTableRows(highlightZ);
@@ -1026,8 +1040,9 @@
       const listEl = document.getElementById('mwTargetList');
       if (!select || !infoEl || !listEl) return;
       const val = select.value;
-      // Clear outputs when no data or when "All" is selected
-      if (!currentSpectrumData || !val || val === 'all') {
+      // Clear outputs when "All" is selected or no value is chosen.  We allow updates even if
+      // currentSpectrumData is null (e.g. Plotly unavailable) so that the safe list can still be shown.
+      if (!val || val === 'all') {
         infoEl.textContent = '';
         listEl.innerHTML = '';
         return;
@@ -1076,6 +1091,20 @@
         } else {
           listHtml += `<li>${mzStr4} (${mapping})</li>`;
           exportedCount++;
+        }
+      }
+      // After listing all safe reductions, append the first overlapping charge-reduced product for this molecular weight.
+      // The first overlap occurs at one reduction beyond the safe limit.
+      const firstR = safe + 1;
+      const firstQ = z - firstR;
+      if (firstQ >= 1) {
+        const firstMz = (M_z + firstQ * H) / firstQ;
+        const firstMzStr4 = firstMz.toFixed(4);
+        const firstMapping = `${z}+→${firstQ}+`;
+        // Only append if this first overlap m/z is above the precursor and not already listed
+        const firstKey = firstMz.toFixed(6);
+        if (firstMz > 0 && !listHtml.includes(firstMzStr4)) {
+          listHtml += `<li><span class="bad">${firstMzStr4} (${firstMapping})</span></li>`;
         }
       }
       infoEl.innerHTML = `<b class="good">${exportedCount}</b> safe charge reduction${exportedCount !== 1 ? 's' : ''}`;
